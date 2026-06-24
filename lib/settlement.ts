@@ -4,12 +4,14 @@ import { Expense, Profile, DebtSummary } from '@/types/database'
 export interface Balance {
   userId: string
   profile?: Profile
-  paid: number      // cuánto ha pagado en total
+  paid: number      // cuánto ha pagado de su bolsillo (sin contar la cuenta conjunta)
   owes: number      // cuánto le corresponde pagar (su parte)
   net: number       // paid - owes (positivo = le deben, negativo = debe)
 }
 
-// Calcula cuánto ha pagado y cuánto debe cada persona
+// Calcula cuánto ha pagado y cuánto debe cada persona.
+// IMPORTANTE: los gastos pagados desde la cuenta conjunta ('joint') NO entran
+// aquí, porque ya están pagados del bote común y no generan deuda entre los dos.
 export function calculateBalances(
   expenses: Expense[],
   members: Profile[]
@@ -22,23 +24,22 @@ export function calculateBalances(
   }
 
   for (const exp of expenses) {
+    // Los gastos de la cuenta conjunta no afectan al saldo entre las personas
+    if (exp.paid_from === 'joint') continue
+
     // Quién paga
     if (balances[exp.paid_by]) {
       balances[exp.paid_by].paid += exp.amount
     }
 
     if (exp.is_shared) {
-      // Gasto compartido: se divide entre split_with (o entre todos si es null)
-      const sharers = exp.split_with && exp.split_with.length > 0
-        ? exp.split_with
-        : members.map(m => m.id)
-
-      const share = exp.amount / sharers.length
-      for (const uid of sharers) {
-        if (balances[uid]) balances[uid].owes += share
+      // Gasto compartido entre 2: reparto 50/50 entre todos los miembros
+      const share = exp.amount / members.length
+      for (const m of members) {
+        if (balances[m.id]) balances[m.id].owes += share
       }
     } else {
-      // Gasto individual: solo lo asume quien lo pagó (no afecta a otros)
+      // Gasto personal: solo lo asume quien lo pagó (no afecta al otro)
       if (balances[exp.paid_by]) balances[exp.paid_by].owes += exp.amount
     }
   }
@@ -51,8 +52,16 @@ export function calculateBalances(
   return Object.values(balances)
 }
 
-// Algoritmo de liquidación: minimiza el número de transferencias
-// Devuelve la lista de "X paga Y€ a Z"
+// Total gastado desde la cuenta conjunta (para mostrarlo aparte en el resumen)
+export function jointTotal(expenses: Expense[]): number {
+  return expenses
+    .filter(e => e.paid_from === 'joint')
+    .reduce((sum, e) => sum + e.amount, 0)
+}
+
+// Algoritmo de liquidación: minimiza el número de transferencias.
+// Con una pareja (2 personas) se reduce a una sola transferencia.
+// Devuelve la lista de "X paga Y€ a Z".
 export function settleDebts(balances: Balance[]): DebtSummary[] {
   const EPSILON = 0.01
 

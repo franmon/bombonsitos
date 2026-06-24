@@ -38,7 +38,7 @@ export default function TabsLayout() {
         options={{
           title: 'Inicio',
           tabBarIcon: ({ color, size }) => <TabIcon name="home-outline" color={color} size={size} />,
-          headerTitle: '🎉 Despedida',
+          headerTitle: '💑 Bombonsitos',
         }}
       />
       <Tabs.Screen
@@ -76,9 +76,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="group"
         options={{
-          title: 'Grupo',
+          title: 'Nosotros',
           tabBarIcon: ({ color, size }) => <TabIcon name="people-outline" color={color} size={size} />,
-          headerTitle: '👥 Grupo',
+          headerTitle: '💑 Nosotros',
         }}
       />
       <Tabs.Screen

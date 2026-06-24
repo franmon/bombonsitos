@@ -9,39 +9,9 @@ import { supabase } from '@/lib/supabase'
 import { COLORS, RADIUS } from '@/constants/theme'
 import { Event, Expense } from '@/types/database'
 
-function useCountdown(date: string | null) {
-  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0 })
-
-  useEffect(() => {
-    if (!date) return
-    const target = new Date(date).getTime()
-
-    function tick() {
-      const now = Date.now()
-      const diff = target - now
-      if (diff <= 0) {
-        setTimeLeft({ days: 0, hours: 0, minutes: 0 })
-        return
-      }
-      setTimeLeft({
-        days: Math.floor(diff / 86400000),
-        hours: Math.floor((diff % 86400000) / 3600000),
-        minutes: Math.floor((diff % 3600000) / 60000),
-      })
-    }
-
-    tick()
-    const interval = setInterval(tick, 60000)
-    return () => clearInterval(interval)
-  }, [date])
-
-  return timeLeft
-}
-
 export default function HomeScreen() {
   const { currentGroup, profile } = useAuth()
   const router = useRouter()
-  const countdown = useCountdown(currentGroup?.countdown_date ?? null)
   const [nextEvent, setNextEvent] = useState<Event | null>(null)
   const [totalExpenses, setTotalExpenses] = useState(0)
   const [memberCount, setMemberCount] = useState(0)
@@ -89,11 +59,10 @@ export default function HomeScreen() {
   async function shareCode() {
     if (!currentGroup) return
     await Share.share({
-      message: `¡Únete a la despedida de ${currentGroup.groom_name ?? 'la despedida'}! 🎉\nUsa el código: ${currentGroup.code}\nDescarga la app BachelorApp para entrar.`,
+      message: `¡Únete a "${currentGroup.name}"! 💑\nUsa el código: ${currentGroup.code}`,
     })
   }
 
-  const hasCoutdown = !!currentGroup?.countdown_date
   const eventDate = nextEvent ? new Date(nextEvent.starts_at) : null
 
   return (
@@ -104,23 +73,6 @@ export default function HomeScreen() {
     >
       {/* Saludo */}
       <Text style={styles.greeting}>Hola, {profile?.name?.split(' ')[0]} 👋</Text>
-
-      {/* Contador regresivo */}
-      {hasCoutdown && (
-        <View style={styles.countdownCard}>
-          <Text style={styles.countdownLabel}>
-            Quedan para la despedida de{' '}
-            <Text style={styles.groomName}>{currentGroup?.groom_name ?? 'la despedida'}</Text>
-          </Text>
-          <View style={styles.countdownRow}>
-            <CountdownUnit value={countdown.days} unit="días" />
-            <Text style={styles.countdownSep}>:</Text>
-            <CountdownUnit value={countdown.hours} unit="horas" />
-            <Text style={styles.countdownSep}>:</Text>
-            <CountdownUnit value={countdown.minutes} unit="min" />
-          </View>
-        </View>
-      )}
 
       {/* Código del grupo */}
       <TouchableOpacity style={styles.codeCard} onPress={shareCode}>
@@ -195,15 +147,6 @@ export default function HomeScreen() {
   )
 }
 
-function CountdownUnit({ value, unit }: { value: number; unit: string }) {
-  return (
-    <View style={styles.countdownUnit}>
-      <Text style={styles.countdownNumber}>{String(value).padStart(2, '0')}</Text>
-      <Text style={styles.countdownUnitLabel}>{unit}</Text>
-    </View>
-  )
-}
-
 function StatCard({ icon, value, label, onPress }: {
   icon: string; value: string | number; label: string; onPress: () => void
 }) {
@@ -220,21 +163,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   content: { padding: 20, paddingBottom: 40 },
   greeting: { fontSize: 22, fontWeight: '700', color: COLORS.text, marginBottom: 20 },
-
-  countdownCard: {
-    backgroundColor: COLORS.primary,
-    borderRadius: RADIUS.lg,
-    padding: 24,
-    marginBottom: 16,
-    alignItems: 'center',
-  },
-  countdownLabel: { fontSize: 13, color: 'rgba(255,255,255,0.8)', marginBottom: 16, textAlign: 'center' },
-  groomName: { fontWeight: '700', color: '#fff' },
-  countdownRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  countdownUnit: { alignItems: 'center' },
-  countdownNumber: { fontSize: 40, fontWeight: '800', color: '#fff', lineHeight: 44 },
-  countdownUnitLabel: { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
-  countdownSep: { fontSize: 32, fontWeight: '300', color: 'rgba(255,255,255,0.6)', marginBottom: 12 },
 
   codeCard: {
     backgroundColor: COLORS.surface,

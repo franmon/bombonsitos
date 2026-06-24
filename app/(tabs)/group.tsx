@@ -1,6 +1,6 @@
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Alert, Switch, RefreshControl,
+  StyleSheet, Alert, RefreshControl,
   Share, ActivityIndicator,
 } from 'react-native'
 import { useState, useEffect, useCallback } from 'react'
@@ -16,25 +16,22 @@ interface MemberWithProfile extends GroupMember {
 }
 
 export default function GroupScreen() {
-  const { user, currentGroup, isAdmin, setCurrentGroup } = useAuth()
+  const { user, currentGroup, setCurrentGroup } = useAuth()
   const router = useRouter()
   const [members, setMembers] = useState<MemberWithProfile[]>([])
-  const [isDiscrete, setIsDiscrete] = useState(currentGroup?.is_discrete ?? false)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
   async function loadMembers() {
     if (!currentGroup) return
 
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('group_members')
       .select('*, profile:profiles!group_members_profile_fkey(*)')
       .eq('group_id', currentGroup.id)
       .order('joined_at', { ascending: true })
 
     setMembers((data as MemberWithProfile[]) ?? [])
-    
-
     setLoading(false)
   }
 
@@ -46,37 +43,19 @@ export default function GroupScreen() {
 
   useEffect(() => {
     loadMembers()
-    setIsDiscrete(currentGroup?.is_discrete ?? false)
   }, [currentGroup])
-
-  async function toggleDiscrete(value: boolean) {
-    if (!currentGroup) return
-    setIsDiscrete(value)
-
-    const { error } = await supabase
-      .from('groups')
-      .update({ is_discrete: value })
-      .eq('id', currentGroup.id)
-
-    if (error) {
-      setIsDiscrete(!value) // revertir
-      Alert.alert('Error', 'No se pudo cambiar el modo discreción.')
-    } else {
-      setCurrentGroup({ ...currentGroup, is_discrete: value })
-    }
-  }
 
   async function shareCode() {
     if (!currentGroup) return
     await Share.share({
-      message: `¡Únete a "${currentGroup.name}"! 🎉\nCódigo: ${currentGroup.code}`,
+      message: `¡Únete a "${currentGroup.name}"! 💑\nCódigo: ${currentGroup.code}`,
     })
   }
 
   function leaveGroup() {
     Alert.alert(
-      'Cambiar de grupo',
-      '¿Quieres salir de este grupo? Podrás volver a unirte con el código.',
+      'Salir',
+      '¿Quieres salir? Podrás volver a unirte con el código.',
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -103,68 +82,47 @@ export default function GroupScreen() {
     )
   }
 
+  // ¿Falta que se una la pareja? (solo 1 miembro de momento)
+  const waitingForPartner = members.length < 2
+
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
     >
-      {/* Cabecera del grupo */}
+      {/* Cabecera */}
       <View style={styles.groupHeader}>
         <Text style={styles.groupName}>{currentGroup?.name}</Text>
-        {currentGroup?.groom_name && (
-          <Text style={styles.groupGroom}>Despedida de {currentGroup.groom_name}</Text>
-        )}
         <TouchableOpacity style={styles.codePill} onPress={shareCode}>
           <Text style={styles.codePillText}>Código: {currentGroup?.code}</Text>
           <Text style={styles.codePillShare}>Compartir ›</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Modo discreción (solo admin) */}
-      {isAdmin && (
-        <View style={styles.discreteCard}>
-          <View style={styles.discreteHeader}>
-            <Text style={styles.discreteTitle}>🤫 Modo discreción</Text>
-            <Switch
-              value={isDiscrete}
-              onValueChange={toggleDiscrete}
-              trackColor={{ false: COLORS.border, true: COLORS.primary }}
-              thumbColor="#fff"
-            />
-          </View>
-          <Text style={styles.discreteDesc}>
-            Cuando está activo, las actividades marcadas como sorpresa se ocultan
-            para que el novio no las vea si está en el grupo.
+      {/* Aviso si la pareja aún no se ha unido */}
+      {waitingForPartner && (
+        <View style={styles.waitingCard}>
+          <Text style={styles.waitingTitle}>💌 Invita a tu pareja</Text>
+          <Text style={styles.waitingDesc}>
+            Comparte el código de arriba para que se una y empecéis a compartir cosas.
           </Text>
         </View>
       )}
 
-      {/* Lista de miembros */}
-      <Text style={styles.sectionTitle}>
-        Miembros ({members.length})
-      </Text>
+      {/* Vosotros */}
+      <Text style={styles.sectionTitle}>Vosotros</Text>
 
       {members.map(member => (
         <View key={member.id} style={styles.memberRow}>
           <Avatar name={member.profile?.name} url={member.profile?.avatar_url} size={48} />
           <View style={styles.memberInfo}>
-            <View style={styles.memberNameRow}>
-              <Text style={styles.memberName}>
-                {member.profile?.name}
-                {member.user_id === user?.id && ' (tú)'}
-              </Text>
-              {member.role === 'admin' && (
-                <View style={styles.adminBadge}>
-                  <Text style={styles.adminBadgeText}>Organizador</Text>
-                </View>
-              )}
-            </View>
+            <Text style={styles.memberName}>
+              {member.profile?.name}
+              {member.user_id === user?.id && ' (tú)'}
+            </Text>
             {member.profile?.phone && (
               <Text style={styles.memberDetail}>📞 {member.profile.phone}</Text>
-            )}
-            {member.profile?.allergies && (
-              <Text style={styles.memberAllergies}>⚠️ {member.profile.allergies}</Text>
             )}
           </View>
         </View>
@@ -176,7 +134,7 @@ export default function GroupScreen() {
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.leaveButton} onPress={leaveGroup}>
-        <Text style={styles.leaveButtonText}>Salir del grupo</Text>
+        <Text style={styles.leaveButtonText}>Salir</Text>
       </TouchableOpacity>
     </ScrollView>
   )
@@ -189,7 +147,6 @@ const styles = StyleSheet.create({
 
   groupHeader: { alignItems: 'center', marginBottom: 24 },
   groupName: { fontSize: 24, fontWeight: '800', color: COLORS.text, textAlign: 'center' },
-  groupGroom: { fontSize: 15, color: COLORS.muted, marginTop: 4 },
   codePill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -203,17 +160,18 @@ const styles = StyleSheet.create({
   codePillText: { fontSize: 14, fontWeight: '700', color: COLORS.primary, letterSpacing: 1 },
   codePillShare: { fontSize: 13, color: COLORS.primary },
 
-  discreteCard: {
+  waitingCard: {
     backgroundColor: COLORS.surface,
     borderRadius: RADIUS.lg,
     padding: 18,
     marginBottom: 24,
     borderWidth: 1,
     borderColor: COLORS.border,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
   },
-  discreteHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  discreteTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
-  discreteDesc: { fontSize: 13, color: COLORS.muted, marginTop: 8, lineHeight: 19 },
+  waitingTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
+  waitingDesc: { fontSize: 13, color: COLORS.muted, marginTop: 8, lineHeight: 19 },
 
   sectionTitle: { fontSize: 17, fontWeight: '700', color: COLORS.text, marginBottom: 14 },
 
@@ -229,17 +187,8 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   memberInfo: { flex: 1 },
-  memberNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   memberName: { fontSize: 16, fontWeight: '600', color: COLORS.text },
-  adminBadge: {
-    backgroundColor: COLORS.primaryLight,
-    borderRadius: RADIUS.sm,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  adminBadgeText: { fontSize: 11, fontWeight: '600', color: COLORS.primary },
   memberDetail: { fontSize: 13, color: COLORS.muted, marginTop: 3 },
-  memberAllergies: { fontSize: 13, color: COLORS.warning, marginTop: 3 },
 
   profileButton: {
     backgroundColor: COLORS.primary,

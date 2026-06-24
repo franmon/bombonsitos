@@ -7,21 +7,18 @@ import { useRouter, useFocusEffect } from 'expo-router'
 import { useAuth } from '@/lib/auth-context'
 import { supabase } from '@/lib/supabase'
 import { Avatar } from '@/components/ui/Avatar'
-import { calculateBalances, settleDebts } from '@/lib/settlement'
+import { calculateBalances, settleDebts, jointTotal } from '@/lib/settlement'
 import { deleteExpense } from '@/lib/delete-helpers'
 import { COLORS, RADIUS, EXPENSE_CATEGORIES } from '@/constants/theme'
-import { Expense, Profile, DebtSummary } from '@/types/database'
+import { Expense, Profile } from '@/types/database'
 
 interface ExpenseWithPayer extends Expense {
   payer: Profile
 }
 
-type Tab = 'list' | 'settle'
-
 export default function ExpensesScreen() {
   const { user, currentGroup } = useAuth()
   const router = useRouter()
-  const [tab, setTab] = useState<Tab>('list')
   const [expenses, setExpenses] = useState<ExpenseWithPayer[]>([])
   const [members, setMembers] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
@@ -38,7 +35,7 @@ export default function ExpensesScreen() {
 
     const { data: memberData } = await supabase
       .from('group_members')
-      .select('profile:profiles(*)')
+      .select('profile:profiles!group_members_profile_fkey(*)')
       .eq('group_id', currentGroup.id)
 
     setExpenses((expData as ExpenseWithPayer[]) ?? [])
@@ -60,9 +57,25 @@ export default function ExpensesScreen() {
   }
 
   const total = expenses.reduce((sum, e) => sum + e.amount, 0)
+  const joint = jointTotal(expenses)
   const balances = calculateBalances(expenses, members)
   const settlements = settleDebts(balances)
-  const myBalance = balances.find(b => b.userId === user?.id)
+  // Con 2 personas hay como mucho una transferencia pendiente
+  const settlement = settlements[0]
+
+  // Texto del saldo entre la pareja
+  let balanceText = 'Estáis en paz 🤝'
+  let balancePositive = true
+  if (settlement) {
+    const iOwe = settlement.from === user?.id
+    if (iOwe) {
+      balanceText = `Le debes €${settlement.amount.toFixed(2)} a ${settlement.toProfile?.name?.split(' ')[0] ?? 'tu pareja'}`
+      balancePositive = false
+    } else {
+      balanceText = `Te debe €${settlement.amount.toFixed(2)} ${settlement.fromProfile?.name?.split(' ')[0] ?? 'tu pareja'}`
+      balancePositive = true
+    }
+  }
 
   if (loading) {
     return (
@@ -78,100 +91,60 @@ export default function ExpensesScreen() {
       <View style={styles.summary}>
         <Text style={styles.summaryTotal}>€{total.toFixed(2)}</Text>
         <Text style={styles.summaryLabel}>gastado en total</Text>
-        {myBalance && (
-          <View style={[
-            styles.myBalancePill,
-            myBalance.net >= 0 ? styles.balancePositive : styles.balanceNegative,
-          ]}>
-            <Text style={styles.myBalanceText}>
-              {myBalance.net >= 0
-                ? `Te deben €${myBalance.net.toFixed(2)}`
-                : `Debes €${Math.abs(myBalance.net).toFixed(2)}`}
-            </Text>
-          </View>
-        )}
-      </View>
 
-      {/* Tabs */}
-      <View style={styles.tabs}>
-        <TouchableOpacity
-          style={[styles.tab, tab === 'list' && styles.tabActive]}
-          onPress={() => setTab('list')}
-        >
-          <Text style={[styles.tabText, tab === 'list' && styles.tabTextActive]}>Gastos</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, tab === 'settle' && styles.tabActive]}
-          onPress={() => setTab('settle')}
-        >
-          <Text style={[styles.tabText, tab === 'settle' && styles.tabTextActive]}>Liquidación</Text>
-        </TouchableOpacity>
+        {joint > 0 && (
+          <Text style={styles.jointLine}>🏦 De la cuenta conjunta: €{joint.toFixed(2)}</Text>
+        )}
+
+        <View style={[
+          styles.balancePill,
+          balancePositive ? styles.balanceOk : styles.balanceDebt,
+        ]}>
+          <Text style={styles.balanceText}>{balanceText}</Text>
+        </View>
       </View>
 
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
       >
-        {tab === 'list' ? (
-          expenses.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyEmoji}>💸</Text>
-              <Text style={styles.emptyTitle}>Sin gastos aún</Text>
-              <Text style={styles.emptyText}>Añade el primer gasto del viaje</Text>
-            </View>
-          ) : (
-            expenses.map(exp => {
-              const cat = EXPENSE_CATEGORIES[exp.category] ?? EXPENSE_CATEGORIES.general
-              return (
-                <TouchableOpacity
-                  key={exp.id}
-                  style={styles.expenseCard}
-                  onLongPress={() => handleDelete(exp.id, exp.title)}
-                  delayLongPress={400}
-                >
-                  <View style={[styles.catIcon, { backgroundColor: cat.color + '22' }]}>
-                    <Text style={styles.catEmoji}>{cat.icon}</Text>
-                  </View>
-                  <View style={styles.expenseBody}>
-                    <Text style={styles.expenseTitle}>{exp.title}</Text>
-                    <Text style={styles.expenseMeta}>
-                      Pagó {exp.payer?.name ?? '?'}
-                      {exp.is_shared ? ' · compartido' : ' · individual'}
-                    </Text>
-                  </View>
-                  <Text style={styles.expenseAmount}>€{exp.amount.toFixed(2)}</Text>
-                </TouchableOpacity>
-              )
-            })
-          )
+        {expenses.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyEmoji}>💸</Text>
+            <Text style={styles.emptyTitle}>Sin gastos aún</Text>
+            <Text style={styles.emptyText}>Añade vuestro primer gasto</Text>
+          </View>
         ) : (
-          /* Liquidación */
-          settlements.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyEmoji}>✅</Text>
-              <Text style={styles.emptyTitle}>Todo cuadrado</Text>
-              <Text style={styles.emptyText}>No hay deudas pendientes entre vosotros</Text>
-            </View>
-          ) : (
-            <>
-              <Text style={styles.settleIntro}>
-                La forma más simple de saldar las cuentas:
-              </Text>
-              {settlements.map((s, i) => (
-                <View key={i} style={styles.settleRow}>
-                  <Avatar name={s.fromProfile?.name} url={s.fromProfile?.avatar_url} size={36} />
-                  <View style={styles.settleArrow}>
-                    <Text style={styles.settleAmount}>€{s.amount.toFixed(2)}</Text>
-                    <Text style={styles.settleArrowIcon}>→</Text>
-                  </View>
-                  <Avatar name={s.toProfile?.name} url={s.toProfile?.avatar_url} size={36} />
-                  <Text style={styles.settleNames}>
-                    {s.fromProfile?.name} paga a {s.toProfile?.name}
+          expenses.map(exp => {
+            const cat = EXPENSE_CATEGORIES[exp.category] ?? EXPENSE_CATEGORIES.general
+            // Etiqueta de origen
+            let tag = '🤝 compartido'
+            if (exp.paid_from === 'joint') tag = '🏦 cuenta conjunta'
+            else if (!exp.is_shared) tag = '👤 personal'
+
+            return (
+              <TouchableOpacity
+                key={exp.id}
+                style={styles.expenseCard}
+                onLongPress={() => handleDelete(exp.id, exp.title)}
+                delayLongPress={400}
+              >
+                <View style={[styles.catIcon, { backgroundColor: cat.color + '22' }]}>
+                  <Text style={styles.catEmoji}>{cat.icon}</Text>
+                </View>
+                <View style={styles.expenseBody}>
+                  <Text style={styles.expenseTitle}>{exp.title}</Text>
+                  <Text style={styles.expenseMeta}>
+                    {exp.paid_from === 'joint'
+                      ? 'Cuenta conjunta'
+                      : `Pagó ${exp.payer?.id === user?.id ? 'tú' : (exp.payer?.name?.split(' ')[0] ?? '?')}`}
+                    {' · '}{tag}
                   </Text>
                 </View>
-              ))}
-            </>
-          )
+                <Text style={styles.expenseAmount}>€{exp.amount.toFixed(2)}</Text>
+              </TouchableOpacity>
+            )
+          })
         )}
       </ScrollView>
 
@@ -188,21 +161,13 @@ const styles = StyleSheet.create({
   summary: { alignItems: 'center', paddingTop: 16, paddingBottom: 20 },
   summaryTotal: { fontSize: 36, fontWeight: '800', color: COLORS.text },
   summaryLabel: { fontSize: 14, color: COLORS.muted, marginTop: 2 },
-  myBalancePill: {
-    marginTop: 12, paddingHorizontal: 16, paddingVertical: 6, borderRadius: RADIUS.full,
+  jointLine: { fontSize: 13, color: COLORS.muted, marginTop: 6 },
+  balancePill: {
+    marginTop: 12, paddingHorizontal: 16, paddingVertical: 8, borderRadius: RADIUS.full,
   },
-  balancePositive: { backgroundColor: '#DCFCE7' },
-  balanceNegative: { backgroundColor: '#FEE2E2' },
-  myBalanceText: { fontSize: 14, fontWeight: '600', color: COLORS.text },
-
-  tabs: {
-    flexDirection: 'row', backgroundColor: COLORS.surface, borderRadius: RADIUS.md,
-    padding: 4, marginHorizontal: 20, marginBottom: 12,
-  },
-  tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: RADIUS.sm },
-  tabActive: { backgroundColor: COLORS.primary },
-  tabText: { fontSize: 15, fontWeight: '500', color: COLORS.muted },
-  tabTextActive: { color: '#fff' },
+  balanceOk: { backgroundColor: '#DCFCE7' },
+  balanceDebt: { backgroundColor: '#FEE2E2' },
+  balanceText: { fontSize: 14, fontWeight: '600', color: COLORS.text },
 
   content: { padding: 20, paddingTop: 4, paddingBottom: 100 },
   emptyState: { alignItems: 'center', paddingTop: 60 },
@@ -224,17 +189,6 @@ const styles = StyleSheet.create({
   expenseTitle: { fontSize: 16, fontWeight: '600', color: COLORS.text },
   expenseMeta: { fontSize: 13, color: COLORS.muted, marginTop: 2 },
   expenseAmount: { fontSize: 17, fontWeight: '700', color: COLORS.text },
-
-  settleIntro: { fontSize: 14, color: COLORS.muted, marginBottom: 16 },
-  settleRow: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.md, padding: 14, marginBottom: 10,
-    borderWidth: 1, borderColor: COLORS.border, flexWrap: 'wrap',
-  },
-  settleArrow: { alignItems: 'center', marginHorizontal: 12 },
-  settleAmount: { fontSize: 14, fontWeight: '700', color: COLORS.primary },
-  settleArrowIcon: { fontSize: 16, color: COLORS.muted },
-  settleNames: { fontSize: 13, color: COLORS.muted, width: '100%', marginTop: 8 },
 
   fab: {
     position: 'absolute', right: 24, bottom: 24, width: 56, height: 56,

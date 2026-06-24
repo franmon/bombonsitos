@@ -7,6 +7,11 @@ export type UserRole = 'admin' | 'member'
 export type RSVPStatus = 'yes' | 'no' | 'pending'
 export type ExpenseCategory = 'food' | 'transport' | 'activity' | 'hotel' | 'general'
 export type DocumentType = 'boarding_pass' | 'hotel' | 'ticket' | 'other'
+// Origen del pago de un gasto en una pareja:
+//  'me'      → lo pagó la persona actual (de su bolsillo)
+//  'partner' → lo pagó la pareja (de su bolsillo)
+//  'joint'   → pagado desde la cuenta conjunta (no genera deuda entre los dos)
+export type ExpensePaidFrom = 'me' | 'partner' | 'joint'
 
 // ── Grupo ────────────────────────────────────────────────────
 export interface Group {
@@ -75,10 +80,11 @@ export interface Expense {
   id: string
   group_id: string
   paid_by: string
+  paid_from: ExpensePaidFrom   // me | partner | joint
   title: string
   amount: number
   is_shared: boolean
-  split_with: string[] | null
+  split_with: string[] | null  // LEGACY: no usado en app de pareja (reparto 50/50)
   category: ExpenseCategory
   created_at: string
   payer?: Profile

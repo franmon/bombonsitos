@@ -21,7 +21,7 @@ const NOTIFY_OPTIONS = [
 ]
 
 export default function NewEventScreen() {
-  const { user, currentGroup, isAdmin } = useAuth()
+  const { user, currentGroup } = useAuth()
   const router = useRouter()
 
   const [title, setTitle] = useState('')
@@ -33,7 +33,6 @@ export default function NewEventScreen() {
   const [hasEnd, setHasEnd] = useState(false)
   const [endDate, setEndDate] = useState(new Date(Date.now() + 2 * 60 * 60 * 1000))
   const [notifyBefore, setNotifyBefore] = useState(60)
-  const [isSurprise, setIsSurprise] = useState(false)
   const [saving, setSaving] = useState(false)
 
   // Control de los pickers (Android los muestra de forma puntual)
@@ -66,7 +65,6 @@ export default function NewEventScreen() {
         starts_at: startDate.toISOString(),
         ends_at: hasEnd ? endDate.toISOString() : null,
         notify_before: notifyBefore,
-        is_surprise: isSurprise,
       })
       .select()
       .single()
@@ -208,24 +206,6 @@ export default function NewEventScreen() {
           ))}
         </View>
 
-        {/* Sorpresa (solo admin) */}
-        {isAdmin && (
-          <View style={styles.surpriseCard}>
-            <View style={styles.switchRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.label}>🤫 Actividad sorpresa</Text>
-                <Text style={styles.hint}>Se oculta al novio cuando el modo discreción está activo.</Text>
-              </View>
-              <Switch
-                value={isSurprise}
-                onValueChange={setIsSurprise}
-                trackColor={{ false: COLORS.border, true: COLORS.primary }}
-                thumbColor="#fff"
-              />
-            </View>
-          </View>
-        )}
-
         <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={saving}>
           {saving
             ? <ActivityIndicator color="#fff" />
@@ -277,10 +257,6 @@ const styles = StyleSheet.create({
   notifyChipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   notifyChipText: { fontSize: 13, color: COLORS.muted, fontWeight: '500' },
   notifyChipTextActive: { color: '#fff' },
-  surpriseCard: {
-    backgroundColor: COLORS.surface, borderRadius: RADIUS.md, padding: 16,
-    marginTop: 20, borderWidth: 1, borderColor: COLORS.border,
-  },
   saveButton: {
     backgroundColor: COLORS.primary, borderRadius: RADIUS.md,
     padding: 16, alignItems: 'center', marginTop: 28,

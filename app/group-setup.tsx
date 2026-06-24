@@ -22,8 +22,6 @@ export default function GroupSetupScreen() {
 
   // Create
   const [groupName, setGroupName] = useState('')
-  const [groomName, setGroomName] = useState('')
-  const [countdownDate, setCountdownDate] = useState('')
 
   const [loading, setLoading] = useState(false)
 
@@ -43,9 +41,11 @@ export default function GroupSetupScreen() {
 
     if (error || !groupId) {
       setLoading(false)
-      // P0002 = grupo no encontrado (lo lanza la función)
+      // P0002 = pareja no encontrada (lo lanza la función)
       if (error?.code === 'P0002') {
-        Alert.alert('Grupo no encontrado', 'Revisa el código e inténtalo de nuevo.')
+        Alert.alert('No encontrado', 'Revisa el código e inténtalo de nuevo.')
+      } else if (error?.code === 'P0003') {
+        Alert.alert('Pareja completa', 'Esta pareja ya tiene dos personas.')
       } else {
         Alert.alert('Error al unirse', error?.message ?? 'Inténtalo de nuevo.')
       }
@@ -62,7 +62,7 @@ export default function GroupSetupScreen() {
     setLoading(false)
 
     if (fetchError || !group) {
-      Alert.alert('Error al cargar el grupo', fetchError?.message ?? 'Inténtalo de nuevo.')
+      Alert.alert('Error al cargar', fetchError?.message ?? 'Inténtalo de nuevo.')
       return
     }
 
@@ -72,12 +72,17 @@ export default function GroupSetupScreen() {
 
   async function handleCreate() {
     if (!groupName.trim()) {
-      Alert.alert('Ponle un nombre', 'El grupo necesita un nombre.')
+      Alert.alert('Ponle un nombre', 'Vuestro espacio necesita un nombre.')
       return
     }
 
     setLoading(true)
 
+
+    const { data: sessionData } = await supabase.auth.getSession()
+    console.log('user.id del contexto:', user?.id)
+    console.log('uid de la sesión real:', sessionData?.session?.user?.id)
+    
     // La columna `code` tiene constraint UNIQUE, así que dejamos que la BD
     // garantice la unicidad. Comprobar antes con un SELECT no sirve: la policy
     // de RLS oculta los grupos ajenos, así que nunca veríamos una colisión.
@@ -96,8 +101,6 @@ export default function GroupSetupScreen() {
         .from('groups')
         .insert({
           name: groupName.trim(),
-          groom_name: groomName.trim() || null,
-          countdown_date: countdownDate || null,
           created_by: user!.id,
           code,
         })
@@ -116,7 +119,7 @@ export default function GroupSetupScreen() {
 
     if (!group) {
       setLoading(false)
-      Alert.alert('Error al crear el grupo', lastError?.message ?? 'Inténtalo de nuevo.')
+      Alert.alert('Error al crear', lastError?.message ?? 'Inténtalo de nuevo.')
       return
     }
 
@@ -135,11 +138,11 @@ export default function GroupSetupScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
-        <Text style={styles.emoji}>🥂</Text>
-        <Text style={styles.title}>Tu viaje</Text>
+        <Text style={styles.emoji}>💑</Text>
+        <Text style={styles.title}>Vuestro espacio</Text>
         <Text style={styles.subtitle}>
-          ¿Te han enviado un código? Únete al grupo.{'\n'}
-          ¿Eres el organizador? Crea uno nuevo.
+          ¿Te han enviado un código? Únete.{'\n'}
+          ¿Empiezas tú? Crea uno nuevo.
         </Text>
 
         {/* Tabs */}
@@ -154,7 +157,7 @@ export default function GroupSetupScreen() {
             style={[styles.tab, tab === 'create' && styles.tabActive]}
             onPress={() => setTab('create')}
           >
-            <Text style={[styles.tabText, tab === 'create' && styles.tabTextActive]}>Crear grupo</Text>
+            <Text style={[styles.tabText, tab === 'create' && styles.tabTextActive]}>Crear</Text>
           </TouchableOpacity>
         </View>
 
@@ -173,7 +176,7 @@ export default function GroupSetupScreen() {
               autoCorrect={false}
             />
             <TouchableOpacity style={styles.primaryButton} onPress={handleJoin} disabled={loading}>
-              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Unirme al grupo</Text>}
+              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Unirme</Text>}
             </TouchableOpacity>
           </View>
         )}
@@ -181,41 +184,22 @@ export default function GroupSetupScreen() {
         {/* CREATE */}
         {tab === 'create' && (
           <View style={styles.form}>
-            <Text style={styles.label}>Nombre del grupo *</Text>
+            <Text style={styles.label}>Nombre de vuestro espacio *</Text>
             <TextInput
               style={styles.input}
-              placeholder="La despedida de Jordan"
+              placeholder="Ej. Fran & pareja"
               placeholderTextColor={COLORS.muted}
               value={groupName}
               onChangeText={setGroupName}
             />
 
-            <Text style={styles.label}>Nombre del novio <Text style={styles.optional}>(opcional)</Text></Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Jordan"
-              placeholderTextColor={COLORS.muted}
-              value={groomName}
-              onChangeText={setGroomName}
-            />
-
-            <Text style={styles.label}>Fecha de la despedida <Text style={styles.optional}>(opcional)</Text></Text>
-            <TextInput
-              style={styles.input}
-              placeholder="2026-09-12"
-              placeholderTextColor={COLORS.muted}
-              value={countdownDate}
-              onChangeText={setCountdownDate}
-            />
-            <Text style={styles.hint}>Formato: YYYY-MM-DD</Text>
-
             <TouchableOpacity style={styles.primaryButton} onPress={handleCreate} disabled={loading}>
-              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Crear grupo</Text>}
+              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Crear</Text>}
             </TouchableOpacity>
 
             <View style={styles.codeInfo}>
               <Text style={styles.codeInfoText}>
-                🔑 Se generará un código de 6 letras que podrás compartir con tus amigos.
+                🔑 Se generará un código de 6 caracteres para que tu pareja se una.
               </Text>
             </View>
           </View>
