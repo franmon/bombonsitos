@@ -10,6 +10,7 @@ import { useAuth } from '@/lib/auth-context'
 import { supabase } from '@/lib/supabase'
 import { capturePhoto, uploadPhoto } from '@/lib/photo-upload'
 import { deletePhoto } from '@/lib/delete-helpers'
+import { runBackup, getDropboxConnection } from '@/lib/dropbox'
 import { COLORS, RADIUS } from '@/constants/theme'
 import { Photo, Profile } from '@/types/database'
 
@@ -42,6 +43,12 @@ export default function PhotosScreen() {
   const [uploading, setUploading] = useState(false)
   const [viewerPhoto, setViewerPhoto] = useState<PhotoWithUploader | null>(null)
 
+  // Modo selección para enviar a Dropbox
+  const [selectMode, setSelectMode] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [dropboxConnected, setDropboxConnected] = useState(false)
+  const [sending, setSending] = useState(false)
+
   async function loadData() {
     if (!currentGroup) return
 
@@ -52,6 +59,10 @@ export default function PhotosScreen() {
       .order('taken_at', { ascending: false })
 
     setPhotos((photoData as PhotoWithUploader[]) ?? [])
+
+    // ¿Dropbox conectado? (para mostrar el botón de enviar)
+    const conn = await getDropboxConnection(currentGroup.id)
+    setDropboxConnected(conn?.status === 'connected')
 
     // Estado de la cápsula
     const { data: capsule } = await supabase
@@ -124,6 +135,33 @@ export default function PhotosScreen() {
     }
   }
 
+  function toggleSelect(id: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false)
+    setSelected(new Set())
+  }
+
+  async function sendSelectedToDropbox() {
+    if (selected.size === 0) return
+    setSending(true)
+    const res = await runBackup(currentGroup!.id, Array.from(selected))
+    setSending(false)
+    if (res.ok) {
+      Alert.alert('Enviado a Dropbox ✓', `${res.uploaded} foto${res.uploaded === 1 ? '' : 's'} en tu Dropbox.`)
+      exitSelectMode()
+      loadData()
+    } else {
+      Alert.alert('Error al enviar', res.error ?? 'Inténtalo de nuevo.')
+    }
+  }
+
   if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
@@ -167,7 +205,32 @@ export default function PhotosScreen() {
           contentContainerStyle={styles.content}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
         >
-          {normalPhotos.length > 0 && (
+          {normalPhotos.length > 0 && dropboxConnected && (
+            <View style={styles.selectBar}>
+              {selectMode ? (
+                <>
+                  <TouchableOpacity onPress={exitSelectMode}>
+                    <Text style={styles.selectCancel}>Cancelar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.sendButton, (selected.size === 0 || sending) && styles.sendButtonDisabled]}
+                    onPress={sendSelectedToDropbox}
+                    disabled={selected.size === 0 || sending}
+                  >
+                    {sending
+                      ? <ActivityIndicator color="#fff" size="small" />
+                      : <Text style={styles.sendButtonText}>Enviar {selected.size} a Dropbox</Text>}
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <TouchableOpacity onPress={() => setSelectMode(true)}>
+                  <Text style={styles.selectStart}>🗂️ Enviar fotos a Dropbox</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          {normalPhotos.length > 0 && !selectMode && (
             <TouchableOpacity style={styles.collageLink} onPress={() => router.push('/collage')}>
               <Text style={styles.collageLinkText}>🖼️ Crear collage del viaje</Text>
             </TouchableOpacity>
@@ -183,16 +246,40 @@ export default function PhotosScreen() {
               <View key={day} style={styles.daySection}>
                 <Text style={styles.dayHeader}>{formatDay(day)}</Text>
                 <View style={styles.grid}>
-                  {dayPhotos.map(photo => (
-                    <TouchableOpacity key={photo.id} onPress={() => setViewerPhoto(photo)}>
-                      <Image source={{ uri: publicUrl(photo.storage_path) }} style={styles.gridImage} />
-                      {photo.location_name && (
-                        <View style={styles.gridLocationBadge}>
-                          <Text style={styles.gridLocationText} numberOfLines={1}>📍</Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  ))}
+                  {dayPhotos.map(photo => {
+                    const isSel = selected.has(photo.id)
+                    const isBacked = !!photo.backed_up_at
+                    return (
+                      <TouchableOpacity
+                        key={photo.id}
+                        onPress={() => selectMode ? toggleSelect(photo.id) : setViewerPhoto(photo)}
+                      >
+                        <Image source={{ uri: publicUrl(photo.storage_path) }} style={styles.gridImage} />
+                        {photo.location_name && !selectMode && (
+                          <View style={styles.gridLocationBadge}>
+                            <Text style={styles.gridLocationText} numberOfLines={1}>📍</Text>
+                          </View>
+                        )}
+                        {/* Indicador de ya respaldada en Dropbox */}
+                        {isBacked && !selectMode && (
+                          <View style={styles.backedBadge}>
+                            <Text style={styles.backedBadgeText}>☁️</Text>
+                          </View>
+                        )}
+                        {/* Check de selección */}
+                        {selectMode && (
+                          <View style={[styles.selectCheck, isSel && styles.selectCheckOn]}>
+                            <Text style={styles.selectCheckText}>{isSel ? '✓' : ''}</Text>
+                          </View>
+                        )}
+                        {selectMode && isBacked && (
+                          <View style={styles.backedOverlay}>
+                            <Text style={styles.backedOverlayText}>☁️</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    )
+                  })}
                 </View>
               </View>
             ))
@@ -267,8 +354,8 @@ export default function PhotosScreen() {
         </ScrollView>
       )}
 
-      {/* FAB añadir (solo en álbum y mapa) */}
-      {tab !== 'capsule' && (
+      {/* FAB añadir (solo en álbum y mapa, no en modo selección) */}
+      {tab !== 'capsule' && !selectMode && (
         <TouchableOpacity style={styles.fab} onPress={() => chooseSource(false)} disabled={uploading}>
           {uploading
             ? <ActivityIndicator color="#fff" />
@@ -322,6 +409,39 @@ const styles = StyleSheet.create({
     padding: 14, alignItems: 'center', marginBottom: 16,
   },
   collageLinkText: { fontSize: 15, fontWeight: '600', color: COLORS.primary },
+
+  selectBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: 16, minHeight: 40,
+  },
+  selectStart: { fontSize: 15, fontWeight: '600', color: COLORS.primary },
+  selectCancel: { fontSize: 15, fontWeight: '500', color: COLORS.muted },
+  sendButton: {
+    backgroundColor: COLORS.primary, borderRadius: RADIUS.full,
+    paddingHorizontal: 18, paddingVertical: 10, minWidth: 120, alignItems: 'center',
+  },
+  sendButtonDisabled: { opacity: 0.5 },
+  sendButtonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  backedBadge: {
+    position: 'absolute', top: 4, right: 4,
+    backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 10,
+    width: 20, height: 20, alignItems: 'center', justifyContent: 'center',
+  },
+  backedBadgeText: { fontSize: 11 },
+  selectCheck: {
+    position: 'absolute', top: 4, left: 4,
+    width: 24, height: 24, borderRadius: 12,
+    borderWidth: 2, borderColor: '#fff', backgroundColor: 'rgba(0,0,0,0.3)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  selectCheckOn: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  selectCheckText: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  backedOverlay: {
+    position: 'absolute', bottom: 4, right: 4,
+    backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 10,
+    width: 20, height: 20, alignItems: 'center', justifyContent: 'center',
+  },
+  backedOverlayText: { fontSize: 11 },
   emptyState: { alignItems: 'center', paddingTop: 60, flex: 1, justifyContent: 'center' },
   emptyEmoji: { fontSize: 56, marginBottom: 16 },
   emptyTitle: { fontSize: 20, fontWeight: '700', color: COLORS.text },

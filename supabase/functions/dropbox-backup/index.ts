@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
     if (userErr || !userData?.user) return json({ error: 'Sesión inválida' }, 401)
     const userId = userData.user.id
 
-    const { group_id } = await req.json()
+    const { group_id, photo_ids } = await req.json()
     if (!group_id) return json({ error: 'Falta group_id' }, 400)
 
     const admin = createClient(supabaseUrl, serviceKey)
@@ -60,12 +60,21 @@ Deno.serve(async (req) => {
       return json({ error: 'No hay conexión de Dropbox para esta pareja' }, 400)
     }
 
-    // Fotos pendientes de respaldar
-    const { data: photos, error: photosErr } = await admin
+    // Fotos a respaldar.
+    // Si vienen photo_ids, sube SOLO esas (selección manual del usuario).
+    // Si no, sube todas las pendientes (backed_up_at IS NULL).
+    let query = admin
       .from('photos')
       .select('id, storage_path, taken_at')
       .eq('group_id', group_id)
-      .is('backed_up_at', null)
+
+    if (Array.isArray(photo_ids) && photo_ids.length > 0) {
+      query = query.in('id', photo_ids)
+    } else {
+      query = query.is('backed_up_at', null)
+    }
+
+    const { data: photos, error: photosErr } = await query
       .order('taken_at', { ascending: true })
       .limit(MAX_PER_RUN)
 

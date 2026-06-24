@@ -140,3 +140,29 @@ export async function disconnectDropbox(groupId: string) {
     .eq('group_id', groupId)
   return !error
 }
+
+// PRUEBA: sube un archivo de texto a Dropbox para validar la conexión.
+export async function testDropbox(groupId: string): Promise<{ ok: boolean; path?: string; error?: string }> {
+  const { data, error } = await supabase.functions.invoke('dropbox-test', {
+    body: { group_id: groupId },
+  })
+  if (error) return { ok: false, error: error.message }
+  if (data?.error) return { ok: false, error: data.error }
+  return { ok: true, path: data?.path }
+}
+
+// Hace backup de fotos a Dropbox.
+// Si pasas photoIds, sube solo esas; si no, sube todas las pendientes.
+export interface BackupResult {
+  ok: boolean
+  uploaded?: number
+  error?: string
+}
+export async function runBackup(groupId: string, photoIds?: string[]): Promise<BackupResult> {
+  const { data, error } = await supabase.functions.invoke('dropbox-backup', {
+    body: { group_id: groupId, photo_ids: photoIds },
+  })
+  if (error) return { ok: false, error: error.message }
+  if (data?.error) return { ok: false, error: data.error }
+  return { ok: true, uploaded: data?.uploaded ?? 0 }
+}
