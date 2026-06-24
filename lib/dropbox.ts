@@ -1,6 +1,7 @@
 import * as AuthSession from 'expo-auth-session'
 import * as Crypto from 'expo-crypto'
 import * as WebBrowser from 'expo-web-browser'
+import * as Linking from 'expo-linking'
 import { supabase } from './supabase'
 
 // Necesario para que el navegador de auth se cierre y devuelva el control a la app
@@ -8,8 +9,7 @@ WebBrowser.maybeCompleteAuthSession()
 
 // App key pública de tu app de Dropbox (no es secreto; el secret vive en la Edge Function).
 // Sustituye por tu App key real, o ponlo en EXPO_PUBLIC_DROPBOX_APP_KEY en el .env.
-//const DROPBOX_APP_KEY = process.env.EXPO_PUBLIC_DROPBOX_APP_KEY ?? '93j3mopc6uclfkd'
-const DROPBOX_APP_KEY = process.env.EXPO_PUBLIC_DROPBOX_APP_KEY!
+const DROPBOX_APP_KEY = process.env.EXPO_PUBLIC_DROPBOX_APP_KEY ?? 'TU_APP_KEY_AQUI'
 
 const DROPBOX_AUTH_ENDPOINT = 'https://www.dropbox.com/oauth2/authorize'
 
@@ -57,7 +57,6 @@ export interface DropboxConnectResult {
 export async function connectDropbox(groupId: string): Promise<DropboxConnectResult> {
   try {
     const redirectUri = getRedirectUri()
-    console.log('REDIRECT URI GENERADO:', redirectUri)
     const { verifier, challenge } = await generatePKCE()
 
     // Construir la URL de autorización con PKCE y token_access_type=offline
@@ -72,18 +71,31 @@ export async function connectDropbox(groupId: string): Promise<DropboxConnectRes
     })
     const authUrl = `${DROPBOX_AUTH_ENDPOINT}?${params.toString()}`
 
-    // Abrir el navegador y esperar la redirección de vuelta
-    const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri)
+    // Capturar la URL de retorno. Usamos una "carrera" entre:
+    //  (a) lo que devuelve openAuthSessionAsync, y
+    //  (b) un listener de Linking que intercepta el deep link bombonsitos://...
+    // Esto evita que Expo Router trate la redirección como una ruta ("Unmatched Route").
+    let linkingSub: { remove: () => void } | null = null
+    const linkingPromise = new Promise<string>((resolve) => {
+      linkingSub = Linking.addEventListener('url', (ev) => resolve(ev.url))
+    })
 
-    if (result.type !== 'success' || !result.url) {
+    const browserPromise = WebBrowser.openAuthSessionAsync(authUrl, redirectUri)
+      .then((r) => (r.type === 'success' && r.url ? r.url : ''))
+
+    const returnedRaw = await Promise.race([browserPromise, linkingPromise])
+    if (linkingSub) linkingSub.remove()
+    WebBrowser.dismissAuthSession?.()
+
+    if (!returnedRaw) {
       return { ok: false, error: 'Autorización cancelada' }
     }
 
-    // Extraer el código de la URL de retorno
-    const returnedUrl = new URL(result.url)
-    const code = returnedUrl.searchParams.get('code')
+    // Extraer el código de la URL de retorno (con Linking.parse, robusto ante schemes)
+    const parsed = Linking.parse(returnedRaw)
+    const code = (parsed.queryParams?.code as string) ?? null
     if (!code) {
-      const err = returnedUrl.searchParams.get('error_description')
+      const err = parsed.queryParams?.error_description as string | undefined
       return { ok: false, error: err ?? 'No se recibió el código de Dropbox' }
     }
 
