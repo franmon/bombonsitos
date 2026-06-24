@@ -81,6 +81,7 @@ export default function RootLayout() {
               <Stack.Screen name="survey" options={{ headerShown: true }} />
               <Stack.Screen name="import-file" options={{ headerShown: true }} />
               <Stack.Screen name="collage" options={{ headerShown: true }} />
+              <Stack.Screen name="dropbox-auth" options={{ headerShown: false }} />
             </Stack>
             <StatusBar style="auto" />
           </NavigationGuard>

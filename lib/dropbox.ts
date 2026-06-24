@@ -13,8 +13,10 @@ const DROPBOX_APP_KEY = process.env.EXPO_PUBLIC_DROPBOX_APP_KEY ?? 'TU_APP_KEY_A
 
 const DROPBOX_AUTH_ENDPOINT = 'https://www.dropbox.com/oauth2/authorize'
 
-// Redirect URI: debe coincidir EXACTAMENTE con el que añadiste en el panel de Dropbox.
-// scheme 'bombonsitos' (del app.json) + ruta 'dropbox-auth'.
+// Redirect URI: usa el path 'dropbox-auth'. Dropbox exige un path/authority,
+// y existe una pantalla real en app/dropbox-auth.tsx que captura este retorno
+// (por eso el router ya no muestra "Unmatched Route").
+// Debe coincidir EXACTAMENTE con el registrado en Dropbox: bombonsitos://dropbox-auth
 function getRedirectUri(): string {
   return AuthSession.makeRedirectUri({
     scheme: 'bombonsitos',
@@ -85,7 +87,8 @@ export async function connectDropbox(groupId: string): Promise<DropboxConnectRes
 
     const returnedRaw = await Promise.race([browserPromise, linkingPromise])
     if (linkingSub) linkingSub.remove()
-    WebBrowser.dismissAuthSession?.()
+    // No forzamos el cierre del navegador: en Android no está disponible
+    // y además se cierra solo al capturar la redirección.
 
     if (!returnedRaw) {
       return { ok: false, error: 'Autorización cancelada' }

@@ -38,6 +38,8 @@ Deno.serve(async (req) => {
 
     const { group_id, photo_ids } = await req.json()
     if (!group_id) return json({ error: 'Falta group_id' }, 400)
+    console.log('DIAG group_id:', group_id)
+    console.log('DIAG photo_ids recibidos:', JSON.stringify(photo_ids))
 
     const admin = createClient(supabaseUrl, serviceKey)
 
@@ -78,6 +80,8 @@ Deno.serve(async (req) => {
       .order('taken_at', { ascending: true })
       .limit(MAX_PER_RUN)
 
+    console.log('DIAG fotos encontradas:', photos?.length ?? 0, photosErr ? `error: ${photosErr.message}` : '')
+
     if (photosErr) return json({ error: 'Error leyendo fotos', detail: photosErr.message }, 500)
     if (!photos || photos.length === 0) {
       return json({ ok: true, uploaded: 0, message: 'No hay fotos pendientes' })
@@ -99,8 +103,10 @@ Deno.serve(async (req) => {
     })
     const tokenData = await tokenResp.json()
     if (!tokenResp.ok || !tokenData.access_token) {
+      console.log('DIAG fallo refresco token:', tokenResp.status, JSON.stringify(tokenData).slice(0, 300))
       return json({ error: 'No se pudo refrescar el token', detail: tokenData }, 400)
     }
+    console.log('DIAG token refrescado OK')
     const accessToken = tokenData.access_token
 
     const baseFolder = conn.folder_path || '/BombonsitosBackups'
@@ -109,11 +115,13 @@ Deno.serve(async (req) => {
 
     for (const photo of photos) {
       try {
+        console.log('DIAG procesando foto:', photo.id, 'path:', photo.storage_path)
         // Descargar la foto del bucket 'photos'
         const { data: blob, error: dlErr } = await admin.storage
           .from('photos')
           .download(photo.storage_path)
         if (dlErr || !blob) {
+          console.log('DIAG error descarga:', dlErr ? dlErr.message : 'blob vacío')
           errors.push(`${photo.storage_path}: no se pudo descargar`)
           continue
         }
@@ -141,9 +149,11 @@ Deno.serve(async (req) => {
 
         if (!uploadResp.ok) {
           const detail = await uploadResp.text()
+          console.log('DIAG Dropbox rechazó:', uploadResp.status, detail.slice(0, 300))
           errors.push(`${fileName}: Dropbox rechazó (${detail.slice(0, 120)})`)
           continue
         }
+        console.log('DIAG subida OK:', fileName)
 
         // Marcar como respaldada
         await admin
