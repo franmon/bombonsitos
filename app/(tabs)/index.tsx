@@ -133,6 +133,10 @@ export default function HomeScreen() {
           <Text style={styles.quickIcon}>⭐</Text>
           <Text style={styles.quickLabel}>Encuesta</Text>
         </TouchableOpacity>
+        <TouchableOpacity style={styles.quickCard} onPress={() => router.push('/trips')}>
+          <Text style={styles.quickEmoji}>🧳</Text>
+          <Text style={styles.quickLabel}>Viajes</Text>
+        </TouchableOpacity>
       </View>
 
       <TouchableOpacity style={styles.importCard} onPress={() => router.push('/import-file')}>
