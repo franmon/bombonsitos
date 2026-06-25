@@ -63,9 +63,9 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.inner}>
-        <Text style={styles.emoji}>🎉</Text>
+        <Text style={styles.emoji}>💑</Text>
         <Text style={styles.title}>Bienvenido</Text>
-        <Text style={styles.subtitle}>Entra para ver tu despedida</Text>
+        <Text style={styles.subtitle}>Entra en vuestro espacio</Text>
 
         <TextInput
           style={styles.input}

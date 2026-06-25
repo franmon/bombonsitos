@@ -15,16 +15,16 @@ export default function WelcomeScreen() {
       <View style={styles.hero}>
         <View style={styles.logoRow}>
           <View style={styles.logoMark}>
-            <Text style={styles.logoMarkText}>✈️</Text>
+            <Text style={styles.logoMarkText}>💑</Text>
           </View>
           <Text style={styles.logoWord}>
-            Despedida<Text style={styles.logoWordAccent}>Jordan</Text>
+            Bombon<Text style={styles.logoWordAccent}>sitos</Text>
           </Text>
         </View>
 
-        <Text style={styles.title}>La despedida perfecta{'\n'}empieza aquí</Text>
+        <Text style={styles.title}>Vuestro espacio{'\n'}en común</Text>
         <Text style={styles.subtitle}>
-          Planes, gastos y fotos del viaje con tu cuadrilla, en un solo sitio.
+          Planes, gastos y fotos de los dos, en un solo sitio.
         </Text>
       </View>
 

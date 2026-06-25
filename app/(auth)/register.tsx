@@ -58,8 +58,8 @@ export default function RegisterScreen() {
     >
       <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
         <View style={styles.logoRow}>
-          <View style={styles.logoMark}><Text style={styles.logoMarkText}>✈️</Text></View>
-          <Text style={styles.logoWord}>Despedida<Text style={styles.logoWordAccent}>Jordan</Text></Text>
+          <View style={styles.logoMark}><Text style={styles.logoMarkText}>💑</Text></View>
+          <Text style={styles.logoWord}>Bombon<Text style={styles.logoWordAccent}>sitos</Text></Text>
         </View>
 
         <Text style={styles.title}>Crea tu cuenta</Text>
@@ -68,7 +68,7 @@ export default function RegisterScreen() {
         <Text style={styles.label}>Tu nombre</Text>
         <TextInput
           style={[styles.input, errors.name && styles.inputError]}
-          placeholder="Cómo te conocen tus amigos"
+          placeholder="Tu nombre"
           placeholderTextColor={COLORS.muted}
           value={name}
           onChangeText={setName}

@@ -57,7 +57,7 @@ export default function ProfileSetupScreen() {
     >
       <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>Añade tu perfil</Text>
-        <Text style={styles.subtitle}>Así tus amigos te reconocen en el grupo.</Text>
+        <Text style={styles.subtitle}>Así te reconoce tu pareja.</Text>
 
         <View style={styles.avatarWrap}>
           <TouchableOpacity style={styles.avatar} onPress={handlePickAvatar} activeOpacity={0.8}>
@@ -76,7 +76,7 @@ export default function ProfileSetupScreen() {
         <Text style={styles.label}>Nombre para mostrar</Text>
         <TextInput
           style={styles.input}
-          placeholder="Cómo te llaman tus amigos"
+          placeholder="Tu nombre"
           placeholderTextColor={COLORS.muted}
           value={name}
           onChangeText={setName}

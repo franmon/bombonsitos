@@ -3,15 +3,15 @@ import {
 } from 'react-native'
 import { useState } from 'react'
 import { useRouter } from 'expo-router'
-import * as Contacts from 'expo-contacts'
+import * as Location from 'expo-location'
 import { requestNotificationPermissions } from '@/lib/notifications'
 import { COLORS, RADIUS } from '@/constants/theme'
 
-// Permisos — notificaciones + contactos. Paso 4 del alta.
+// Permisos — notificaciones + ubicación. Paso 4 del alta.
 export default function PermissionsScreen() {
   const router = useRouter()
   const [notif, setNotif] = useState(false)
-  const [contacts, setContacts] = useState(false)
+  const [location, setLocation] = useState(false)
   const [loading, setLoading] = useState(false)
 
   async function toggleNotif() {
@@ -20,17 +20,17 @@ export default function PermissionsScreen() {
     setNotif(granted)
   }
 
-  async function toggleContacts() {
-    if (contacts) { setContacts(false); return }
-    const { status } = await Contacts.requestPermissionsAsync()
-    setContacts(status === 'granted')
+  async function toggleLocation() {
+    if (location) { setLocation(false); return }
+    const { status } = await Location.requestForegroundPermissionsAsync()
+    setLocation(status === 'granted')
   }
 
   async function handleContinue() {
     setLoading(true)
     // Pide los permisos que aún no estén activados antes de seguir
     if (!notif) await requestNotificationPermissions()
-    if (!contacts) await Contacts.requestPermissionsAsync()
+    if (!location) await Location.requestForegroundPermissionsAsync()
     setLoading(false)
     router.push('/onboarding/invite')
   }
@@ -46,13 +46,13 @@ export default function PermissionsScreen() {
         <View style={styles.list}>
           <PermissionRow
             tone={COLORS.primary} toneBg={COLORS.primaryLight} icon="🔔"
-            title="Notificaciones" desc="Avisos de nuevos planes, gastos y mensajes del grupo."
+            title="Notificaciones" desc="Avisos de nuevos planes, gastos y novedades."
             on={notif} onToggle={toggleNotif}
           />
           <PermissionRow
-            tone={COLORS.accent} toneBg={COLORS.accentLight} icon="👥"
-            title="Contactos" desc="Encuentra y añade a tus amigos al viaje más rápido."
-            on={contacts} onToggle={toggleContacts}
+            tone={COLORS.accent} toneBg={COLORS.accentLight} icon="📍"
+            title="Ubicación" desc="Para geolocalizar vuestras fotos en el mapa."
+            on={location} onToggle={toggleLocation}
           />
         </View>
 
