@@ -36,37 +36,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Cargar sesión inicial
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    let mounted = true
+    let initialized = false // evita procesar dos cargas iniciales a la vez
+
+    // Maneja una sesión (inicial o por cambio de auth) de forma centralizada.
+    async function handleSession(session: Session | null) {
+      if (!mounted) return
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
-        fetchProfile(session.user.id)
+        await fetchProfile(session.user.id)
       } else {
+        setProfile(null)
+        setCurrentGroup(null)
+        setIsAdmin(false)
         setLoading(false)
       }
-    }).catch(() => {
-      // Si getSession falla, no quedarse colgado en el spinner
-      setLoading(false)
-    })
+    }
 
-    // Escuchar cambios de auth
+    // Carga inicial: una sola vez.
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (!initialized) {
+          initialized = true
+          handleSession(session)
+        }
+      })
+      .catch(() => {
+        if (mounted) setLoading(false)
+      })
+
+    // Cambios de auth posteriores (login, logout, refresh de token).
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setSession(session)
-        setUser(session?.user ?? null)
-        if (session?.user) {
-          await fetchProfile(session.user.id)
+      (_event, session) => {
+        // El primer evento que dispara Supabase al arrancar lo ignoramos
+        // si getSession ya hizo la carga inicial, para no duplicar fetchProfile.
+        if (!initialized) {
+          initialized = true
+          handleSession(session)
         } else {
-          setProfile(null)
-          setCurrentGroup(null)
-          setIsAdmin(false)
-          setLoading(false)
+          handleSession(session)
         }
       }
     )
 
     return () => {
+      mounted = false
       subscription.unsubscribe()
     }
   }, [])
@@ -87,6 +102,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, currentGroup])
 
   async function fetchProfile(userId: string) {
+    // Timeout de seguridad: si las consultas se cuelgan, no dejamos
+    // la app en el spinner para siempre (máximo 10s).
+    const safety = setTimeout(() => setLoading(false), 10000)
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -112,6 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Si algo falla, no dejar el perfil en undefined (eso colgaría el spinner)
       setProfile(null)
     } finally {
+      clearTimeout(safety)
       // Pase lo que pase, terminamos la carga
       setLoading(false)
     }
