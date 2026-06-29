@@ -9,8 +9,7 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal",
-      "environment": "production"
+      "distribution": "internal"
     },
     "production": {
       "autoIncrement": true

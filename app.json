@@ -1,7 +1,8 @@
 {
   "expo": {
     "name": "bombonsitos",
-    "slug": "bombonsitos",
+//    "slug": "bombonsitos",
+    "slug": "BachelorApp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -23,7 +24,12 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
       ],
-      "package": "com.franmon.bombonsitos"
+      "package": "com.franmon.bombonsitos",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDQGaHjup1nmdni9chtYNsNeOwZhaTwlqk"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -48,8 +54,7 @@
         {
           "locationWhenInUsePermission": "La app usa tu ubicación para geolocalizar las fotos."
         }
-      ],
-      "expo-web-browser"
+      ]
     ],
     "extra": {
       "router": {},
